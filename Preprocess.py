@@ -113,16 +113,17 @@ for i, FILE_NAME in enumerate(stories):
     bert_dict['input_ids'][0][511] = tokenizer.vocab['[SEP]']
     segments_ids = create_segment(bert_dict['input_ids'][0])
 
-    data_dict = {"src": bert_dict['input_ids'][0].tolist(), "labels": label, "segs": segments_ids, 'clss': cls_ids,
+    # dataset = []
+    data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), "labels": label,  'clss': cls_ids,
                         'src_txt': origin_content, "tgt_txt": tgt_text}
 
     dataset.append(data_dict)
 
     if (i == 184):
-        torch.save(dataset, (preporcessed_stories_dir + "PTS.train.0.bert.pt"))
+        torch.save(dataset, (preporcessed_stories_dir + "/PTS.train.all.bert.pt"))
         dataset = []
     elif (i == 204):
-        torch.save(dataset,  (preporcessed_stories_dir + "PTS.test.0.bert.pt"))
+        torch.save(dataset,  (preporcessed_stories_dir + "/PTS.test.all.bert.pt"))
 
 print("Preprocess Done!")
 
