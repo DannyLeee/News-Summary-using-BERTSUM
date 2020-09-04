@@ -1,3 +1,4 @@
 .*/
 dataset/
 *.pt
+__pycache__/

@@ -20,7 +20,6 @@ class Classifier(nn.Module):
 class Summarizer (nn.Module):
     def __init__(self, encoder = "classifier"):
         super(Summarizer, self).__init__()
-        self.device = device
         # 把 bert 拿進來
         self.bert = BertModel.from_pretrained('hfl/chinese-bert-wwm', output_hidden_states=True)
         # 串接不同的下游
