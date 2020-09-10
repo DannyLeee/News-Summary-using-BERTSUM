@@ -2,3 +2,4 @@
 dataset/
 *.pt
 __pycache__/
+result/

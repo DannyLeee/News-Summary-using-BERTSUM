@@ -1,7 +1,15 @@
+
 import pandas as pd
 import os
 from transformers import BertTokenizer
 import torch
+import xml.etree.cElementTree as ET
+
+tree = ET.parse('./dataset/TC/TestFile_TD_DOS/GoldHair_DocRatio_REF_20Test_Text01.xml')
+root = tree.getroot()
+test_set = set()
+for child in root:
+    test_set.add(child[3][0].text)
 
 LM = "hfl/chinese-bert-wwm"
 tokenizer = BertTokenizer.from_pretrained(LM)
@@ -33,6 +41,8 @@ output: decode of index (string)
 def decoder(index):
     result = ""
     for i in index:
+        if (int(i)>8533):
+            print(df_dict.loc[int(i), 0])
         result += df_dict.loc[int(i), 0]
     return result
 
@@ -62,7 +72,7 @@ def content_preprocess(content, ans):
                 result_label.append(0) # label
         content_list[i] = "[CLS] " + text + " [SEP]"
     result_content = ' '.join(content_list)
-    tgt_text = '<p>'.join(tgt_text_list)
+    tgt_text = '<q>'.join(tgt_text_list)
     return result_content, result_label, cls_ids, origin_content, tgt_text
 
 """
@@ -82,7 +92,8 @@ def create_segment(input_ids):
             segments_ids += s * [1]
     return segments_ids
 
-dataset = []
+train_dataset = []
+test_dataset = []
 
 for i, FILE_NAME in enumerate(stories):
     """answer"""
@@ -113,18 +124,16 @@ for i, FILE_NAME in enumerate(stories):
     bert_dict['input_ids'][0][511] = tokenizer.vocab['[SEP]']
     segments_ids = create_segment(bert_dict['input_ids'][0])
 
-    # dataset = []
     data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), "labels": label,  'clss': cls_ids,
                         'src_txt': origin_content, "tgt_txt": tgt_text}
 
-    dataset.append(data_dict)
+    if FILE_NAME in test_set:
+        test_dataset.append(data_dict)
+    else:
+        train_dataset.append(data_dict)
 
-    if (i == 184):
-        torch.save(dataset, (preporcessed_stories_dir + "/PTS.train.all.bert.pt"))
-        dataset = []
-    elif (i == 204):
-        torch.save(dataset,  (preporcessed_stories_dir + "/PTS.test.all.bert.pt"))
+
+# torch.save(train_dataset, (preporcessed_stories_dir + "/PTS_all.train.pt"))
+# torch.save(test_dataset,  (preporcessed_stories_dir + "/PTS_all.test.pt"))
 
 print("Preprocess Done!")
-
-
