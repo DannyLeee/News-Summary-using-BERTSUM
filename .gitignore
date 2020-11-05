@@ -3,3 +3,4 @@ dataset/
 *.pt
 __pycache__/
 result/
+chinese_wwm_pytorch
