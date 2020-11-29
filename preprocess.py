@@ -4,6 +4,15 @@ import os
 from transformers import BertTokenizer
 import torch
 import xml.etree.cElementTree as ET
+import argparse 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-LM", default="hfl/chinese-bert-wwm", type=str)
+parser.add_argument("-result_path", default="./dataset/bert_data", type=str, help="result folder path")
+parser.add_argument("-human_N", default="1", type=str)
+parser.add_argument("-percent", default="01", type=str, choices=["01", "02", "03"])
+parser.add_argument("-mode", default="bertsum", type=str)
+args = parser.parse_args()
 
 tree = ET.parse('./dataset/TC/TestFile_TD_DOS/GoldHair_DocRatio_REF_20Test_Text01.xml')
 root = tree.getroot()
@@ -11,17 +20,15 @@ test_set = set()
 for child in root:
     test_set.add(child[3][0].text)
 
-LM = "hfl/chinese-bert-wwm"
-tokenizer = BertTokenizer.from_pretrained(LM)
 
+tokenizer = BertTokenizer.from_pretrained(args.LM)
 stories_dir = os.path.abspath("./dataset/TC/TestFile_TD_DOS")
-preporcessed_stories_dir = os.path.abspath("./dataset/bert_data_for_BERTSUM/TC")
 
 """dictionary"""
 DICT_PATH = "./dataset/TC/Lexicon2003-72k.txt"
 df_dict = pd.read_csv(DICT_PATH, encoding="cp950", header=None)
 
-print("Preparing to preporcess %s to %s ..." % (stories_dir, preporcessed_stories_dir))
+print("Preparing to preporcess %s to %s ..." % (stories_dir, args.result_path))
 stories = os.listdir(stories_dir)
 # make IO list file
 print("Making list of files to preporcess...")
@@ -29,9 +36,6 @@ print("Making list of files to preporcess...")
 for s in stories:
     if (not s.endswith('txt')):
         stories.remove(s)
-
-Human_N = '1'
-Percent = {10:'01', 20:'02', 30:'03'}
 
 """
 answer decoder
@@ -41,8 +45,6 @@ output: decode of index (string)
 def decoder(index):
     result = ""
     for i in index:
-        if (int(i)>8533):
-            print(df_dict.loc[int(i), 0])
         result += df_dict.loc[int(i), 0]
     return result
 
@@ -97,7 +99,7 @@ test_dataset = []
 
 for i, FILE_NAME in enumerate(stories):
     """answer"""
-    ANS_PATH = "./dataset/TC/TestFile_TD_DOS/DocRatio/Human_" + Human_N + "/" + Percent[10] + "/" + FILE_NAME
+    ANS_PATH = "./dataset/TC/TestFile_TD_DOS/DocRatio/Human_" + args.human_N + "/" + args.percent + "/" + FILE_NAME
     ans_file = open(ANS_PATH)
     raw_ans = ans_file.read()
 
@@ -124,8 +126,12 @@ for i, FILE_NAME in enumerate(stories):
     bert_dict['input_ids'][0][511] = tokenizer.vocab['[SEP]']
     segments_ids = create_segment(bert_dict['input_ids'][0])
 
-    data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), "labels": label,  'clss': cls_ids,
-                        'src_txt': origin_content, "tgt_txt": tgt_text}
+    if (args.mode == "bertsum"):
+        data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), \
+                     "labels": label,  'clss': cls_ids, 'src_txt': origin_content, "tgt_txt": tgt_text}
+    elif (args.mode == "gan"):
+        data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), \
+                     'src_txt': origin_content, "tgt_txt": tgt_text}
 
     if FILE_NAME in test_set:
         test_dataset.append(data_dict)
@@ -133,7 +139,7 @@ for i, FILE_NAME in enumerate(stories):
         train_dataset.append(data_dict)
 
 
-# torch.save(train_dataset, (preporcessed_stories_dir + "/PTS_all.train.pt"))
-# torch.save(test_dataset,  (preporcessed_stories_dir + "/PTS_all.test.pt"))
+torch.save(train_dataset, (args.result_path + "/PTS_all.train.pt"))
+torch.save(test_dataset,  (args.result_path + "/PTS_all.test.pt"))
 
 print("Preprocess Done!")
