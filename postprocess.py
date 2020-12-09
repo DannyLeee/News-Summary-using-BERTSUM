@@ -5,7 +5,7 @@ import pickle
 parser = argparse.ArgumentParser()
 parser.add_argument("-root_path", type=str, required=True)
 parser.add_argument("-file_name", type=str, required=True, help="without extention")
-parser.add_argument("-mode", type=str, choices=['3', 's10', 'w10'], default='3')
+parser.add_argument("-mode", type=str, choices=['3', 'w10'], default='3')
 args = parser.parse_args()
 
 with open("voc.pkl", 'rb') as fp:
@@ -16,11 +16,6 @@ with open("sentence_len.pkl", 'rb') as fp:
     sentence_len = pickle.load(fp)
 
 predict = []
-# FILE_PATH = "./result/classifier_step180_word10.candidate"
-# FILE_PATH = "./result/transformer_step180_word10.candidate"
-# FILE_PATH = "./result/baseline_step180_word10.candidate"
-# FILE_PATH = "./result/raw_lead3_word10.txt"
-
 # input raw prediction
 print("reading raw prediction ...")
 with open(f"{args.root_path + args.file_name}.candidate", "r") as fileIn:
@@ -32,8 +27,6 @@ with open(f"{args.root_path + args.file_name}.candidate", "r") as fileIn:
         for _, s in enumerate(sentence_list):
             sentence += s
             if args.mode == "w10" and len(sentence) >= word_len[l]*0.1:
-                break
-            elif args.mode == "s10" and _ >= sentence_len[l]*0.1:
                 break
         predict.append(sentence)
         line = fileIn.readline()

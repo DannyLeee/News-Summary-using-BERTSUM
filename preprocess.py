@@ -1,14 +1,14 @@
 
 import pandas as pd
 import os
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 import torch
 import xml.etree.cElementTree as ET
 import argparse 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-LM", default="hfl/chinese-bert-wwm", type=str)
-parser.add_argument("-result_path", default="./dataset/bert_data", type=str, help="result folder path")
+parser.add_argument("-result_path", default="./dataset/for_BERTSUM", type=str, help="result folder path")
 parser.add_argument("-human_N", default="1", type=str)
 parser.add_argument("-percent", default="01", type=str, choices=["01", "02", "03"])
 parser.add_argument("-mode", default="bertsum", type=str)
@@ -21,7 +21,7 @@ for child in root:
     test_set.add(child[3][0].text)
 
 
-tokenizer = BertTokenizer.from_pretrained(args.LM)
+tokenizer = AutoTokenizer.from_pretrained(args.LM)
 stories_dir = os.path.abspath("./dataset/TC/TestFile_TD_DOS")
 
 """dictionary"""
@@ -64,15 +64,23 @@ def content_preprocess(content, ans):
     tgt_text_list = []
     pos = 0
     for i, text in enumerate(content_list):
-        if (pos < 512):
+        if args.LM.find("xlnet") == -1: # BERT/RoBERTa
             cls_ids.append(pos)
             pos += len(text) + 2 # +2 for [CLS], [SEP]
-            if (ans.find(text) != -1):
-                result_label.append(1) # label
-                tgt_text_list.append(text)
-            else:
-                result_label.append(0) # label
-        content_list[i] = "[CLS] " + text + " [SEP]"
+        else: # xlnet
+            pos += len(text) + 2 # +2 for [CLS], [SEP]
+            cls_ids.append(pos)
+
+        if (ans.find(text) != -1):
+            result_label.append(1) # label
+            tgt_text_list.append(text)
+        else:
+            result_label.append(0) # label
+            
+        if args.LM.find("xlnet") == -1: # BERT/RoBERTa
+            content_list[i] = tokenizer.cls_token + text + tokenizer.sep_token # [CLS] sentence [SEP]
+        else: # xlnet
+            content_list[i] = text + tokenizer.sep_token + tokenizer.cls_token # sentence <sep> <cls>
     result_content = ' '.join(content_list)
     tgt_text = '<q>'.join(tgt_text_list)
     return result_content, result_label, cls_ids, origin_content, tgt_text
@@ -85,7 +93,10 @@ output: segment embedding (list of int)
 """
 def create_segment(input_ids):
     segments_ids = []
-    _segs = [-1] + [i for i, t in enumerate(input_ids) if t == tokenizer.vocab['[SEP]']]
+    if args.LM.find("xlnet") == -1: # BERT/RoBERTa
+        _segs = [-1] + [i for i, t in enumerate(input_ids) if t == tokenizer.sep_token_id]
+    else: # xlnet
+        _segs = [-1] + [i for i, t in enumerate(input_ids) if t == tokenizer.cls_token_id]
     segs = [_segs[i] - _segs[i - 1] for i in range(1, len(_segs))]
     for i, s in enumerate(segs):
         if (i % 2 == 0):
@@ -117,14 +128,25 @@ for i, FILE_NAME in enumerate(stories):
 
     bert_dict = tokenizer.encode_plus(content,
                                     add_special_tokens = False,
-                                    return_token_type_ids = False,
+                                    return_token_type_ids = None,
                                     max_length=512,
-                                    pad_to_max_length=True,
+                                    padding='max_length',
                                     return_tensors='pt',
                                     truncation=True)
 
-    bert_dict['input_ids'][0][511] = tokenizer.vocab['[SEP]']
+    if args.LM.find("xlnet") == -1: # BERT
+        bert_dict['input_ids'][0][511] = tokenizer.sep_token_id
+    else: # xlnet
+        bert_dict['input_ids'][0][510] = tokenizer.sep_token_id
+        bert_dict['input_ids'][0][511] = tokenizer.cls_token_id
     segments_ids = create_segment(bert_dict['input_ids'][0])
+
+    if args.LM.find("xlnet") != -1: # xlnet
+        cls_ids = []
+        for _, ids in enumerate(bert_dict["input_ids"][0]):
+            if ids == tokenizer.cls_token_id:
+                cls_ids += [_]
+    label = label[: len(cls_ids)]
 
     if (args.mode == "bertsum"):
         data_dict = {"src": bert_dict['input_ids'][0].tolist(), "segs": segments_ids, "att_msk" : bert_dict['attention_mask'][0].tolist(), \
