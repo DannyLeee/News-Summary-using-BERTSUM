@@ -5,3 +5,4 @@ __pycache__/
 result/
 LM/
 *.pkl
+logs/

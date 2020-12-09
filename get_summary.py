@@ -1,26 +1,36 @@
 from preprocess import get_bert_data
 from header import timestamp
 import torch
+import glob
+import os
 
 LM = "LM/chinese_wwm_pytorch/"
+en2encoder = {"cls":"classifier","trans":"transformer", "rnn":"rnn"}
 
 def get_summary(mode, encoder, origin_text):
-    summary = ""
+    model = en2encoder[encoder]
+
     # preprocess to bert_data
     timestamp("preprocess to bert_data")
     bert_data = get_bert_data(origin_text, LM=LM)
-    torch.save(bert_data, "dataset/inference/infer.test.pt")
-    timestamp("--")
+    torch.save([bert_data], "dataset/inference/infer.test.pt")
 
     # feed into model by calling command
+    timestamp("feed to model")
+    if mode == "ext":
+        command = f"python3 ../BertSum/src/train.py -mode test -report_rouge false -bert_data_path ./dataset/inference/infer -visible_gpus 0  -gpu_ranks 0 -world_size 1 -batch_size 3000 -decay_method noam -log_file ./logs/inference -use_interval true -temp_dir ./temp -result_path ./result/inference/infer_{model} -rnn_size 768 -bert_config_path {LM}/config.json -test_from ../BertSum/models/NewsSummary/LCSTS/bert_{model}/model_step_20000.pt -encoder {model}" # TODO: can change model?
+    elif mode == "abs":
+        command = f"python3 " # TODO
+    os.system(command)
 
     # get output
-
-    print(bert_data)
-    return summary
+    list_of_files = glob.glob('./result/inference/*.candidate') # * means all if need specific format then *.csv
+    latest_file = max(list_of_files, key=os.path.getctime)
+    with open(latest_file) as fp:
+        return fp.readline()[:-1].split("<q>") # summary
 
 mode = "ext"
-encoder = "trans"
+encoder = "rnn"
 origin_text = """歡迎回到新聞現場關心國際焦點 
 以 巴 持續 傳出 流血衝突 
 不過 以色列 星期二 展開 另 一 波 撤軍 行動 退出 先前 占領 的 巴勒斯坦 政經 中心 拉 瑪 拉 
@@ -46,4 +56,4 @@ origin_text = """歡迎回到新聞現場關心國際焦點
 同時 建立 一個 巴勒斯坦 國 
 公視 新聞 陳 秋 玫 編譯 
 """
-get_summary(mode, encoder, origin_text)
+print(get_summary(mode, encoder, origin_text))
