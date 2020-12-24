@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 import torch
 import xml.etree.cElementTree as ET
 import argparse 
+import re
 
 """
 answer decoder
@@ -24,8 +25,28 @@ output: processed content(string), label (list of 1/0), cls id (list of int),
         origin content (list of string), target text (list of string)
 """
 def content_preprocess(tokenizer, content, ans="", LM="LM/chinese_wwm_pytorch"):
-    content = content.replace(" ", "")
+    content = re.sub('\s', '', content)
+    content = re.sub('。', '。\n', content)
+    content = re.sub('！', '！\n', content)
+    content = re.sub('？', '？\n', content)
     content_list = content.splitlines()
+    if len(content_list) <= 12:
+        content = re.sub('，', '，\n', content)
+        content = re.sub('；', '；\n', content)
+        temp = content.splitlines()
+        content_list = []
+        t = ""
+        for text in temp:
+            if len(text) <= 9:
+                if text[-1]=='，' or text[-1]=='；':
+                    t = text
+                    continue
+                else: # stop word
+                    content_list[-1] += text
+                    continue
+            content_list += [t+text]
+            t = ""
+        
     origin_content = content_list[:] # create a shallow copy, if don't add [:] will get the pointer
     result_label = []
     segments_ids = []
