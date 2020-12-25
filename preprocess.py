@@ -30,7 +30,7 @@ def content_preprocess(tokenizer, content, ans="", LM="LM/chinese_wwm_pytorch"):
     content = re.sub('！', '！\n', content)
     content = re.sub('？', '？\n', content)
     content_list = content.splitlines()
-    if len(content_list) <= 12:
+    if len(content_list) <= 30:
         content = re.sub('，', '，\n', content)
         content = re.sub('；', '；\n', content)
         temp = content.splitlines()

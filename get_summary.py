@@ -5,12 +5,17 @@ import glob
 import os
 from multiprocessing import Pool
 import json
+from opencc import OpenCC
 
 LM = "LM/chinese_wwm_pytorch/"
 en2encoder = {"cls":"classifier","trans":"transformer", "rnn":"rnn"}
 
 def get_summary(mode, encoder, origin_text):
-    model = en2encoder[encoder]
+    MODEL = en2encoder[encoder]
+    
+    cc = OpenCC('tw2sp')
+    if mode == "abs":
+        origin_text = cc.convert(origin_text)
 
     # preprocess to bert_data
     timestamp("preprocess to bert_data")
@@ -23,23 +28,27 @@ def get_summary(mode, encoder, origin_text):
 
     # feed into model by calling command
     BERT_DATA_PATH = f"./dataset/inference/{mode}_infer"
-    RESULT_PATH = f"./result/inference/infer_{mode}_{model}"
-    VISIBLE_GPUS = "1"
-    GPU_RANKS = "1"
+    RESULT_PATH = f"./result/inference/infer_{mode}_{MODEL}"
+    VISIBLE_GPUS = "0"
+    GPU_RANKS = "0"
     timestamp("feed to model")
     if mode == "ext":
-        command = f"python3 /home/danny/BertSum/src/train.py -mode test -report_rouge false -bert_data_path {BERT_DATA_PATH} -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -world_size 1 -batch_size 3000 -decay_method noam -log_file ./logs/inference -use_interval true -temp_dir ./temp -result_path {RESULT_PATH} -rnn_size 768 -bert_config_path {LM}/config.json -test_from ../BertSum/models/NewsSummary/LCSTS/bert_{model}/model_step_20000.pt -encoder {model}" # TODO: can change model?
+        command = f"python3 /home/danny/BertSum/src/train.py -mode test -report_rouge false -bert_data_path {BERT_DATA_PATH} -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -batch_size 3000 -decay_method noam -log_file ./logs/inference -use_interval true -temp_dir ./temp -result_path {RESULT_PATH} -rnn_size 768 -bert_config_path {LM}/config.json -test_from ../BertSum/models/NewsSummary/PTS/bert_{MODEL}/model_step_180.pt -encoder {MODEL}" # TODO: can change model?
     elif mode == "abs":
         #  min_length = max(int(len(origin_text) * 0.05), 5)
         min_length = 10
         max_length = max(int(len(origin_text) * 0.3), 10)
         step = 1000000
         command = f"python3 /home/B10615023/PreSummWWM/src/train.py -task abs -mode test -report_rouge false -block_trigram False -batch_size 3000 -test_batch_size 500 -bert_data_path {BERT_DATA_PATH} -log_file ./logs/inference -sep_optim true -use_interval true -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -max_pos 512 -alpha 0.97 -result_path {RESULT_PATH} -min_length {min_length} -max_length {max_length} -beam_size 10 -test_from /home/B10615023/PreSummWWM/model/model_step_{step}.pt"
-    os.system(command)
+    flag = os.system(command)
+    if flag != 0:
+        return f"Error: command failed; err_code: {flag}"
 
     # get output
     if mode == "abs":
         list_of_files = glob.glob('./result/inference/infer_abs*.candidate') # * means all if need specific format then *.csv
+        cc = OpenCC('s2t')
+        list_of_files[0] = cc.convert(list_of_files[0])
     elif mode == "ext":
         list_of_files = glob.glob('./result/inference/infer_ext*.candidate') # * means all if need specific format then *.csv
     latest_file = max(list_of_files, key=os.path.getctime)
