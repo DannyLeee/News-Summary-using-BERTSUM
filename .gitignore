@@ -6,3 +6,4 @@ result/
 LM/
 *.pkl
 logs/
+env.py
