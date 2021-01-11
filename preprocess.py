@@ -26,6 +26,10 @@ output: processed content(string), label (list of 1/0), cls id (list of int),
 """
 def content_preprocess(tokenizer, content, ans="", LM="LM/chinese_wwm_pytorch"):
     content = re.sub('\s', '', content)
+    # content = re.sub(',', '，', content)
+    content = re.sub('!', '！', content)
+    content = re.sub('\?', '？', content)
+
     content = re.sub('。', '。\n', content)
     content = re.sub('！', '！\n', content)
     content = re.sub('？', '？\n', content)
@@ -33,19 +37,38 @@ def content_preprocess(tokenizer, content, ans="", LM="LM/chinese_wwm_pytorch"):
     if len(content_list) <= 30:
         content = re.sub('，', '，\n', content)
         content = re.sub('；', '；\n', content)
+        # content = re.sub('、', '、\n', content)
+
         temp = content.splitlines()
         content_list = []
         t = ""
-        for text in temp:
+        for _, text in enumerate(temp):
             if len(text) <= 9:
-                if text[-1]=='，' or text[-1]=='；':
+                if text[-1]=='，' or text[-1]=='、':
                     t = text
                     continue
                 else: # stop word
-                    content_list[-1] += text
+                    if t != "":
+                        content_list += [t]
+                        t=""
+                    try:
+                        content_list[-1] += text
+                    except:
+                        content_list += [text]
                     continue
             content_list += [t+text]
             t = ""
+    if len(content_list) <= 3:
+        content = re.sub('\s', '', content)
+        content = re.sub('。', '。\n', content)
+        content = re.sub('！', '！\n', content)
+        content = re.sub('？', '？\n', content)
+        content = re.sub('，', '，\n', content)
+        content = re.sub('；', '；\n', content)
+        # content = re.sub('、', '、\n', content)
+        content_list = content.splitlines()
+
+    print(content_list)
         
     origin_content = content_list[:] # create a shallow copy, if don't add [:] will get the pointer
     result_label = []
