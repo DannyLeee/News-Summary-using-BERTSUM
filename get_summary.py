@@ -29,16 +29,16 @@ def get_summary(mode, encoder, origin_text):
     # feed into model by calling command
     BERT_DATA_PATH = f"./dataset/inference/{mode}_infer"
     RESULT_PATH = f"./result/inference/infer_{mode}_{MODEL}"
-    VISIBLE_GPUS = "0"
-    GPU_RANKS = "0"
+    VISIBLE_GPUS = "-1"
+    GPU_RANKS = "-1"
     timestamp("feed to model")
     if mode == "ext":
-        command = f"python3 /home/danny/BertSum/src/train.py -mode test -report_rouge false -bert_data_path {BERT_DATA_PATH} -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -batch_size 3000 -decay_method noam -log_file ./logs/inference -use_interval true -temp_dir ./temp -result_path {RESULT_PATH} -rnn_size 768 -bert_config_path {LM}/config.json -test_from ../BertSum/models/NewsSummary/PTS/bert_{MODEL}/model_step_180.pt -encoder {MODEL}" # TODO: can change model?
+        command = f"python3 /home/danny/BertSum/src/train.py -mode test -report_rouge false -bert_data_path {BERT_DATA_PATH} -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -batch_size 3000 -decay_method noam -log_file ./logs/inference -use_interval true -temp_dir ./temp -result_path {RESULT_PATH} -rnn_size 768 -bert_config_path {LM}/config.json -test_from ../BertSum/models/NewsSummary/LCSTS/bert_{MODEL}/model_step_20000.pt -encoder {MODEL}" # TODO: can change model?
     elif mode == "abs":
         #  min_length = max(int(len(origin_text) * 0.05), 5)
         min_length = 10
-        max_length = max(int(len(origin_text) * 0.3), 10)
-        step = 1000000
+        max_length = 30
+        step = 1500000
         command = f"python3 /home/B10615023/PreSummWWM/src/train.py -task abs -mode test -report_rouge false -block_trigram False -batch_size 3000 -test_batch_size 500 -bert_data_path {BERT_DATA_PATH} -log_file ./logs/inference -sep_optim true -use_interval true -visible_gpus {VISIBLE_GPUS} -gpu_ranks {GPU_RANKS} -max_pos 512 -alpha 0.97 -result_path {RESULT_PATH} -min_length {min_length} -max_length {max_length} -beam_size 10 -test_from /home/B10615023/PreSummWWM/model/model_step_{step}.pt"
     flag = os.system(command)
     if flag != 0:
@@ -47,13 +47,26 @@ def get_summary(mode, encoder, origin_text):
     # get output
     if mode == "abs":
         list_of_files = glob.glob('./result/inference/infer_abs*.candidate') # * means all if need specific format then *.csv
-        cc = OpenCC('s2t')
-        list_of_files[0] = cc.convert(list_of_files[0])
     elif mode == "ext":
         list_of_files = glob.glob('./result/inference/infer_ext*.candidate') # * means all if need specific format then *.csv
     latest_file = max(list_of_files, key=os.path.getctime)
     with open(latest_file) as fp:
-        return "\n".join(fp.readline()[:-1].replace(' ', '').split("<q>")) # summary
+        cc = OpenCC('s2t')
+        raw_summary = fp.readline()[:-1].replace(' ', '')
+        summary = cc.convert(raw_summary)
+        if mode == "ext":
+            raw_summary = raw_summary.split("<q>")
+            j = 0
+            for i, sentence in enumerate(bert_data["src_txt"]):
+                if sentence==raw_summary[j]:
+                    bert_data["src_txt"][i] = "<mark>" + bert_data["src_txt"][i] + "</mark>"
+                    j+=1
+                    if j == len(raw_summary):
+                        break
+
+            return summary.replace("<q>", '<br>'), cc.convert("".join(bert_data["src_txt"])) # summary
+        else:
+            return summary.replace("<q>", '<br>') # summary
 
 if __name__ == "__main__":
     origin_text = """（中央社記者張茗喧台北20日電）中央流行疫情指揮中心今天宣布新增3例武漢肺炎境外移入病例，2例為台籍女機師（案760）同事，其中1人有症狀且機上無防護，血清抗體也是陽性，確認此為航空器造成的感染事件。
